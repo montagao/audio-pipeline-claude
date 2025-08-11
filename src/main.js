@@ -8,6 +8,8 @@ class AudioExtractionDemo {
         this.networkSpeed = null;
         this.clientExtractSpeed = 2; // Default: 2x realtime
         this.serverExtractSpeed = 10; // Default: 10x realtime
+        this.extractedAudioBlob = null; // Store extracted audio for playback
+        this.extractedAudioUrl = null; // Store audio URL for cleanup
         
         this.init();
     }
@@ -207,6 +209,14 @@ class AudioExtractionDemo {
             
             const data = await this.ffmpeg.readFile('output.m4a');
             const audioBlob = new Blob([data.buffer], { type: 'audio/m4a' });
+            
+            // Store the audio blob for playback
+            this.extractedAudioBlob = audioBlob;
+            if (this.extractedAudioUrl) {
+                URL.revokeObjectURL(this.extractedAudioUrl);
+            }
+            this.extractedAudioUrl = URL.createObjectURL(audioBlob);
+            
             this.updateStep('client-extract', 'completed');
             
             // Step 3: Upload audio
@@ -230,7 +240,7 @@ class AudioExtractionDemo {
             const endTime = performance.now();
             const totalTime = (endTime - startTime) / 1000;
             
-            this.showResults('client', totalTime, audioBlob.size);
+            this.showResults('client', totalTime, audioBlob.size, audioBlob);
             
         } catch (error) {
             console.error('Client extraction failed:', error);
@@ -291,7 +301,7 @@ class AudioExtractionDemo {
             const endTime = performance.now();
             const totalTime = (endTime - startTime) / 1000;
             
-            this.showResults('server', totalTime, this.currentFile.size);
+            this.showResults('server', totalTime, this.currentFile.size, null);
             
         } catch (error) {
             console.error('Server extraction failed:', error);
@@ -307,11 +317,31 @@ class AudioExtractionDemo {
         el.textContent = status === 'completed' ? '✓' : status === 'active' ? '●' : '○';
     }
 
-    showResults(method, time, dataSize) {
+    showResults(method, time, dataSize, audioBlob = null) {
         const resultsEl = document.getElementById('results');
         resultsEl.style.display = 'block';
         
         const bandwidth = (dataSize * 8) / (time * 1000000); // Mbps
+        
+        // Create audio player HTML if we have an audio blob
+        const audioPlayerHtml = audioBlob && this.extractedAudioUrl ? `
+            <div class="audio-player-section">
+                <h3>🎵 Extracted Audio Playback</h3>
+                <p style="margin-bottom: 15px; color: #666;">Play the extracted audio to verify successful extraction:</p>
+                <audio controls class="audio-player">
+                    <source src="${this.extractedAudioUrl}" type="audio/m4a">
+                    <source src="${this.extractedAudioUrl}" type="audio/mp4">
+                    Your browser does not support the audio element.
+                </audio>
+                <div class="audio-info">
+                    <span>Format: M4A (AAC)</span>
+                    <span>•</span>
+                    <span>Size: ${(audioBlob.size / 1024).toFixed(2)} KB</span>
+                    <span>•</span>
+                    <span>Compression: ${(this.currentFile.size / audioBlob.size).toFixed(1)}× smaller than video</span>
+                </div>
+            </div>
+        ` : '';
         
         resultsEl.innerHTML = `
             <div class="winner-banner">
@@ -332,6 +362,7 @@ class AudioExtractionDemo {
                     <div class="metric-card-value">${bandwidth.toFixed(2)}<span class="metric-card-unit">Mbps</span></div>
                 </div>
             </div>
+            ${audioPlayerHtml}
         `;
     }
 
