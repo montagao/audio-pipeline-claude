@@ -10,6 +10,7 @@ class AudioExtractionDemo {
         this.serverExtractSpeed = 10; // Default: 10x realtime
         this.extractedAudioBlob = null; // Store extracted audio for playback
         this.extractedAudioUrl = null; // Store audio URL for cleanup
+        this.stepTimings = {}; // Track timing for each step
         
         this.init();
     }
@@ -189,22 +190,28 @@ class AudioExtractionDemo {
         ];
         
         try {
-            // Reset timeline
+            // Reset timeline and timings
+            this.stepTimings = {};
             steps.forEach(step => {
                 const el = document.getElementById(step.id);
                 el.className = 'timeline-status pending';
                 el.textContent = '○';
+                // Reset duration display
+                const durationEl = document.getElementById(step.id + '-duration');
+                if (durationEl) durationEl.textContent = '';
             });
             
             // Step 1: Load video
             this.updateStep('client-load', 'active');
             const startTime = performance.now();
+            let stepStart = performance.now();
             
             await this.ffmpeg.writeFile('input.mp4', await fetchFile(this.currentFile));
-            this.updateStep('client-load', 'completed');
+            this.updateStep('client-load', 'completed', stepStart);
             
             // Step 2: Extract audio
             this.updateStep('client-extract', 'active');
+            stepStart = performance.now();
             await this.ffmpeg.exec(['-i', 'input.mp4', '-vn', '-acodec', 'copy', 'output.m4a']);
             
             const data = await this.ffmpeg.readFile('output.m4a');
@@ -217,10 +224,11 @@ class AudioExtractionDemo {
             }
             this.extractedAudioUrl = URL.createObjectURL(audioBlob);
             
-            this.updateStep('client-extract', 'completed');
+            this.updateStep('client-extract', 'completed', stepStart);
             
             // Step 3: Upload audio
             this.updateStep('client-upload', 'active');
+            stepStart = performance.now();
             const formData = new FormData();
             formData.append('audio', audioBlob, 'audio.m4a');
             
@@ -230,12 +238,13 @@ class AudioExtractionDemo {
             });
             
             const result = await response.json();
-            this.updateStep('client-upload', 'completed');
+            this.updateStep('client-upload', 'completed', stepStart);
             
             // Step 4: Process
             this.updateStep('client-process', 'active');
+            stepStart = performance.now();
             await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate processing
-            this.updateStep('client-process', 'completed');
+            this.updateStep('client-process', 'completed', stepStart);
             
             const endTime = performance.now();
             const totalTime = (endTime - startTime) / 1000;
@@ -266,14 +275,19 @@ class AudioExtractionDemo {
         ];
         
         try {
-            // Reset timeline
+            // Reset timeline and timings
+            this.stepTimings = {};
             steps.forEach(step => {
                 const el = document.getElementById(step.id);
                 el.className = 'timeline-status pending';
                 el.textContent = '○';
+                // Reset duration display
+                const durationEl = document.getElementById(step.id + '-duration');
+                if (durationEl) durationEl.textContent = '';
             });
             
             const startTime = performance.now();
+            let stepStart = performance.now();
             
             // Step 1: Upload video
             this.updateStep('server-upload', 'active');
@@ -286,17 +300,19 @@ class AudioExtractionDemo {
             });
             
             const result = await response.json();
-            this.updateStep('server-upload', 'completed');
+            this.updateStep('server-upload', 'completed', stepStart);
             
             // Step 2: Server extraction
             this.updateStep('server-extract', 'active');
+            stepStart = performance.now();
             await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate extraction
-            this.updateStep('server-extract', 'completed');
+            this.updateStep('server-extract', 'completed', stepStart);
             
             // Step 3: Process
             this.updateStep('server-process', 'active');
+            stepStart = performance.now();
             await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate processing
-            this.updateStep('server-process', 'completed');
+            this.updateStep('server-process', 'completed', stepStart);
             
             const endTime = performance.now();
             const totalTime = (endTime - startTime) / 1000;
@@ -311,10 +327,22 @@ class AudioExtractionDemo {
         }
     }
 
-    updateStep(stepId, status) {
+    updateStep(stepId, status, startTime = null) {
         const el = document.getElementById(stepId);
         el.className = `timeline-status ${status}`;
         el.textContent = status === 'completed' ? '✓' : status === 'active' ? '●' : '○';
+        
+        // Update timing if this step is being completed
+        if (status === 'completed' && startTime) {
+            const duration = (performance.now() - startTime) / 1000;
+            this.stepTimings[stepId] = duration;
+            
+            // Update duration display
+            const durationEl = document.getElementById(stepId + '-duration');
+            if (durationEl) {
+                durationEl.textContent = `${duration.toFixed(2)}s`;
+            }
+        }
     }
 
     showResults(method, time, dataSize, audioBlob = null) {
@@ -432,24 +460,28 @@ class AudioExtractionDemo {
                                 <div class="timeline-status pending" id="client-load">○</div>
                                 <div class="timeline-content">
                                     <div class="timeline-title">Load video into browser</div>
+                                    <div class="timeline-duration" id="client-load-duration"></div>
                                 </div>
                             </div>
                             <div class="timeline-item">
                                 <div class="timeline-status pending" id="client-extract">○</div>
                                 <div class="timeline-content">
                                     <div class="timeline-title">Extract audio with FFmpeg.wasm</div>
+                                    <div class="timeline-duration" id="client-extract-duration"></div>
                                 </div>
                             </div>
                             <div class="timeline-item">
                                 <div class="timeline-status pending" id="client-upload">○</div>
                                 <div class="timeline-content">
                                     <div class="timeline-title">Upload audio file</div>
+                                    <div class="timeline-duration" id="client-upload-duration"></div>
                                 </div>
                             </div>
                             <div class="timeline-item">
                                 <div class="timeline-status pending" id="client-process">○</div>
                                 <div class="timeline-content">
                                     <div class="timeline-title">Server processing</div>
+                                    <div class="timeline-duration" id="client-process-duration"></div>
                                 </div>
                             </div>
                         </div>
@@ -474,18 +506,21 @@ class AudioExtractionDemo {
                                 <div class="timeline-status pending" id="server-upload">○</div>
                                 <div class="timeline-content">
                                     <div class="timeline-title">Upload full video</div>
+                                    <div class="timeline-duration" id="server-upload-duration"></div>
                                 </div>
                             </div>
                             <div class="timeline-item">
                                 <div class="timeline-status pending" id="server-extract">○</div>
                                 <div class="timeline-content">
                                     <div class="timeline-title">Server extracts audio</div>
+                                    <div class="timeline-duration" id="server-extract-duration"></div>
                                 </div>
                             </div>
                             <div class="timeline-item">
                                 <div class="timeline-status pending" id="server-process">○</div>
                                 <div class="timeline-content">
                                     <div class="timeline-title">Server processing</div>
+                                    <div class="timeline-duration" id="server-process-duration"></div>
                                 </div>
                             </div>
                         </div>

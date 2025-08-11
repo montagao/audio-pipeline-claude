@@ -245,8 +245,11 @@ body {
 }
 
 .timeline-duration {
-    font-size: 0.85rem;
-    color: #666;
+    font-size: 0.9rem;
+    color: #667eea;
+    font-weight: 600;
+    margin-top: 3px;
+    min-height: 20px;
 }
 
 .run-button {
